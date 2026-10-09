@@ -1,189 +1,232 @@
-import time
-from astropy.io import fits
-import matplotlib.pyplot as plt
-import numpy as np
 import streamlit as st
+import plotly.graph_objects as go
+import numpy as np
+import matplotlib.pyplot as plt
+import time
+from astro_api import fetch_infrared_cutout
 
-# 🌌 Page Config & Sci-Fi Dark Theme Styling
-st.set_page_config(
-    page_title="Stardust Syndicate - SPHEREx Blinker",
-    page_icon="🔭",
-    layout="wide",
-)
+# --- 1. PAGE SETUP & AUTOBLINKER CSS ---
+st.set_page_config(page_title="Stardust Syndicate | Universe Monitor", layout="wide", page_icon="🔭")
 
-st.markdown(
-    """
+# Custom CSS for the Autoblinker!
+st.markdown("""
     <style>
-    .main { background-color: #0b0f19; color: #e2e8f0; }
-    .stSidebar { background-color: #1e293b; }
-    h1, h2, h3 { color: #38bdf8 !important; font-family: 'Courier New', monospace; }
-    .metric-card { background: #1e293b; padding: 15px; border-radius: 10px; border: 1px solid #334155; }
+    .blinker {
+        animation: blinker 1.5s linear infinite;
+        color: #FF3333;
+        font-weight: bold;
+        font-size: 1.1rem;
+        margin-bottom: 10px;
+    }
+    @keyframes blinker {
+        50% { opacity: 0; }
+    }
     </style>
-""",
-    unsafe_allow_html=True,
+""", unsafe_allow_html=True)
+
+st.title("🔭 Stardust Syndicate: WISE 0855−0714 Command Center")
+
+# --- 2. TARGET COORDINATES ---
+target_ra = 133.795   # 08h 55m 10.8s
+target_dec = -7.245   # -07° 14′ 42.5″
+
+# --- 3. TELEMETRY SIDEBAR (WITH AUTOBLINKER) ---
+with st.sidebar:
+    st.markdown('<div class="blinker">🔴 LIVE UPLINK ACTIVE</div>', unsafe_allow_html=True)
+    st.header("🛰️ Live Telemetry")
+    st.markdown("Target Locked: **WISE 0855−0714**")
+    
+    st.metric(label="Distance", value="7.43 Light-Years", delta="-0.04 ly uncertainty")
+    st.metric(label="Surface Temperature", value="~276 K (3 °C)", delta="Water ice clouds detected")
+    st.metric(label="Estimated Mass", value="3–10 M_Jup", delta="Sub-brown dwarf regime")
+    st.metric(label="Right Ascension", value="08h 55m 10.8s")
+    st.metric(label="Declination", value="−07° 14′ 42.5″")
+
+# --- 4. INTERACTIVE SKY MAP (WIDE ANGLE TRACKING) ---
+st.subheader("🗺️ Live Celestial Tracking Map (RA / Dec Field)")
+
+np.random.seed(42)
+num_stars = 150
+star_ra = np.random.uniform(target_ra - 10, target_ra + 10, num_stars)
+star_dec = np.random.uniform(target_dec - 10, target_dec + 10, num_stars)
+star_sizes = np.random.uniform(2, 6, num_stars)
+
+fig_main = go.Figure()
+
+# Background Star Field
+fig_main.add_trace(go.Scatter(
+    x=star_ra, y=star_dec, mode='markers',
+    marker=dict(size=star_sizes, color='white', opacity=0.7), name="Catalog Stars"
+))
+
+# Target Lock Reticle (Glow Ring)
+fig_main.add_trace(go.Scatter(
+    x=[target_ra], y=[target_dec], mode='markers',
+    marker=dict(size=24, color='rgba(255, 50, 50, 0.3)', symbol='circle'),
+    showlegend=False, hoverinfo="none"
+))
+
+# Target Center Crosshair
+fig_main.add_trace(go.Scatter(
+    x=[target_ra], y=[target_dec], mode='markers+text',
+    marker=dict(size=12, color='#FF3333', symbol='cross', line=dict(width=2, color='white')),
+    text=["  WISE 0855−0714"], textposition="middle right",
+    textfont=dict(color="#FFD700", size=13, family="Courier New"), name="Locked Target"
+))
+
+fig_main.update_layout(
+    xaxis=dict(title="Right Ascension (°)", range=[target_ra - 12, target_ra + 12], autorange="reversed", showgrid=True, gridcolor='rgba(255, 255, 255, 0.15)', zeroline=False),
+    yaxis=dict(title="Declination (°)", range=[target_dec - 12, target_dec + 12], showgrid=True, gridcolor='rgba(255, 255, 255, 0.15)', zeroline=False),
+    paper_bgcolor='#0B0E14', plot_bgcolor='#0B0E14', font=dict(color='#E0E6ED'),
+    height=550, margin=dict(l=40, r=40, t=40, b=40)
+)
+st.plotly_chart(fig_main, use_container_width=True)
+# --- 5. PROPER MOTION TIME-MACHINE (NATIVE PLOTLY ANIMATION) ---
+st.divider()
+st.subheader("⏱️ Proper Motion Time-Machine (Jump Loop)")
+st.write("Set the fast-forward timeline, then click the button on the map to watch WISE 0855−0714 physically jump between current and future coordinates!")
+
+# Controls
+years_lapsed = st.slider("🕰️ Fast-Forward Target (Years)", min_value=1, max_value=100, value=15, step=1)
+
+pm_ra_deg_yr = -0.00225 
+pm_dec_deg_yr = 0.00019 
+
+current_ra = target_ra + (pm_ra_deg_yr * years_lapsed)
+current_dec = target_dec + (pm_dec_deg_yr * years_lapsed)
+
+# Generate static background stars
+np.random.seed(99)
+pm_star_ra = np.random.uniform(target_ra - 0.1, target_ra + 0.1, 50)
+pm_star_dec = np.random.uniform(target_dec - 0.1, target_dec + 0.1, 50)
+pm_star_sizes = np.random.uniform(2, 5, 50)
+
+# 1. Define individual traces
+trace_stars = go.Scatter(
+    x=pm_star_ra, 
+    y=pm_star_dec, 
+    mode='markers', 
+    marker=dict(size=pm_star_sizes, color='white', opacity=0.4), 
+    hoverinfo="none"
 )
 
-# App Header
-st.title("🔭 Stardust Syndicate: SPHEREx Rogue Object Blinker")
-st.markdown(
-    "### Interactive Astrometric Comparator for **WISE 0855−0714** (The Cold"
-    " Ghost)"
+trace_ghost = go.Scatter(
+    x=[target_ra], 
+    y=[target_dec], 
+    mode='markers', 
+    marker=dict(size=12, color='rgba(255, 255, 255, 0.15)', symbol='cross'), 
+    hoverinfo="none"
 )
-st.markdown("---")
 
+trace_current = go.Scatter(
+    x=[target_ra], 
+    y=[target_dec], 
+    mode='markers+text',
+    marker=dict(size=14, color='#00FFCC', symbol='cross-thin', line=dict(width=3, color='#00FFCC')),
+    text=["  CURRENT (2026)"], 
+    textposition="middle right",
+    textfont=dict(color="#00FFCC", size=14, family="Courier New")
+)
 
-# Load baseline FITS file safely
-@st.cache_data
-def load_baseline_fits():
-  hdu_0 = fits.open("stardust_target_epoch_0.fits")[0]
-  return hdu_0.data, hdu_0.header
+trace_future = go.Scatter(
+    x=[current_ra], 
+    y=[current_dec], 
+    mode='markers+text',
+    marker=dict(size=14, color='#00FFCC', symbol='cross-thin', line=dict(width=3, color='#00FFCC')),
+    text=[f"  FUTURE (+{years_lapsed} YRS)"], 
+    textposition="middle right",
+    textfont=dict(color="#00FFCC", size=14, family="Courier New")
+)
 
+# 2. Define animation frames cleanly
+frame_1 = go.Frame(data=[trace_stars, trace_ghost, trace_current], name="pos1")
+frame_2 = go.Frame(data=[trace_stars, trace_ghost, trace_future], name="pos2")
+
+# 3. Assemble figure
+fig_pm = go.Figure(
+    data=[trace_stars, trace_ghost, trace_current],
+    frames=[frame_1, frame_2]
+)
+
+fig_pm.update_layout(
+    xaxis=dict(
+        title="Right Ascension (°)", 
+        range=[target_ra - 0.25, target_ra + 0.05], 
+        autorange="reversed", 
+        showgrid=True, 
+        gridcolor='rgba(255, 255, 255, 0.05)', 
+        zeroline=False
+    ),
+    yaxis=dict(
+        title="Declination (°)", 
+        range=[target_dec - 0.05, target_dec + 0.05], 
+        showgrid=True, 
+        gridcolor='rgba(255, 255, 255, 0.05)', 
+        zeroline=False
+    ),
+    paper_bgcolor='#0B0E14', 
+    plot_bgcolor='#0B0E14', 
+    font=dict(color='#E0E6ED'),
+    height=450, 
+    margin=dict(l=40, r=40, t=40, b=40), 
+    showlegend=False,
+    updatemenus=[
+        dict(
+            type="buttons", 
+            showactive=False,
+            y=1.05, 
+            x=0.5, 
+            xanchor="center", 
+            yanchor="bottom",
+            buttons=[
+                dict(
+                    label="🔴 ACTIVATE JUMP LOOP",
+                    method="animate",
+                    args=[
+                        None, 
+                        dict(
+                            frame=dict(duration=800, redraw=True), 
+                            transition=dict(duration=0), 
+                            fromcurrent=True, 
+                            mode="immediate", 
+                            loop=True
+                        )
+                    ]
+                )
+            ]
+        )
+    ]
+)
+
+st.plotly_chart(fig_pm, use_container_width=True)
+# --- 6. REAL-TIME ASTRONOMICAL IMAGE CUTOUT ---
+st.subheader("📸 Deep Space Infrared Cutout")
+
+@st.cache_data(show_spinner=False)
+def get_cached_image(ra, dec):
+    return fetch_infrared_cutout(ra, dec)
 
 try:
-  img_data_0, header = load_baseline_fits()
-
-  # Sidebar Telemetry & Witty Mission Flavor
-  st.sidebar.header("🎛️ Mission Controls")
-  st.sidebar.markdown(
-      "**Target:** WISE 0855−0714\n* **Distance:** ~7.2 light-years (Basically"
-      " next-door neighbors!)\n* **Temp:** ~250 K / -23°C (Colder than your"
-      " fridge 🥶)\n* **Proper Motion:** 8.15\"/yr (Speedy ghost 👻)"
-  )
-
-  # Dynamic vibe check based on user timeline slider
-  st.sidebar.markdown("---")
-  st.sidebar.header("⏳ Temporal Baseline")
-  delta_years = st.sidebar.slider(
-      "Simulation Time Jump (Years):", 1.0, 15.0, 10.0, 1.0
-  )
-
-  chill_factor = (
-      "Absolute Zero Nomad 🧊"
-      if delta_years > 10
-      else "Cruising Stellar Breeze 🌠"
-  )
-  st.sidebar.info(f"🛰️ **Vibe Check:** {chill_factor}")
-  st.sidebar.markdown("---")
-
-  mode = st.sidebar.radio(
-      "Display Mode:", ("Manual Blinker Toggle", "⚡ Auto-Blink Animation Loop")
-  )
-
-  # Dynamically calculate pixel shifts based on proper motion values
-  pixel_scale = 1.375  # arcsec/pixel for WISE
-  shift_x_arcsec = (-8123.7 / 1000.0) * delta_years
-  shift_y_arcsec = (673.2 / 1000.0) * delta_years
-
-  shift_x_pixels = int(np.round(shift_x_arcsec / pixel_scale))
-  shift_y_pixels = int(np.round(shift_y_arcsec / pixel_scale))
-
-  # Build dynamic Epoch 1 image using NumPy matrix manipulation with boundary clipping
-  img_data_1 = img_data_0.copy()
-  source_y, source_x = np.unravel_index(np.argmax(img_data_0), img_data_0.shape)
-  box_size = 15
-
-  stamp = img_data_0[
-      source_y - box_size : source_y + box_size,
-      source_x - box_size : source_x + box_size,
-  ].copy()
-  bg_median = np.median(img_data_0)
-
-  # Clear old position and stamp at the shifted proper-motion coordinate
-  img_data_1[
-      source_y - box_size : source_y + box_size,
-      source_x - box_size : source_x + box_size,
-  ] = bg_median
-
-  max_y, max_x = img_data_0.shape
-  new_y = np.clip(source_y + shift_y_pixels, box_size, max_y - box_size)
-  new_x = np.clip(source_x + shift_x_pixels, box_size, max_x - box_size)
-
-  img_data_1[
-      new_y - box_size : new_y + box_size, new_x - box_size : new_x + box_size
-  ] = stamp
-
-  # Layout columns
-  col1, col2 = st.columns([2, 1])
-
-  with col1:
-    if mode == "Manual Blinker Toggle":
-      epoch_choice = st.radio(
-          "Select Epoch View:",
-          (
-              "Epoch 0: AllWISE Baseline (2010)",
-              f"Epoch 1: Shifted (+{int(delta_years)} Yrs)",
-          ),
-          horizontal=True,
-      )
-
-      fig, ax = plt.subplots(figsize=(7, 7))
-      fig.patch.set_facecolor("#0b0f19")
-      ax.set_facecolor("#0b0f19")
-
-      if "Baseline" in epoch_choice:
-        ax.imshow(img_data_0, cmap="inferno", origin="lower")
-        ax.set_title(
-            "Epoch 0: AllWISE Baseline Survey", color="#38bdf8", fontsize=14
-        )
-      else:
-        ax.imshow(img_data_1, cmap="inferno", origin="lower")
-        ax.set_title(
-            f"Epoch 1: Shifted +{int(delta_years)} Yrs (ΔX:"
-            f" {shift_x_pixels}px, ΔY: {shift_y_pixels}px)",
-            color="#f43f5e",
-            fontsize=14,
-        )
-
-      ax.axis("off")
-      st.pyplot(fig)
-
-    else:
-      st.markdown("### ⚡ Live Blinker Loop Active (Watching proper motion...)")
-      speed = st.slider("Blink Speed (Seconds per frame):", 0.1, 1.5, 0.5)
-      frame_slot = st.empty()
-
-      # Auto-blink execution loop
-      for _ in range(15):
-        fig0, ax0 = plt.subplots(figsize=(6, 6))
-        fig0.patch.set_facecolor("#0b0f19")
-        ax0.set_facecolor("#0b0f19")
-        ax0.imshow(img_data_0, cmap="inferno", origin="lower")
-        ax0.set_title("🟢 Epoch 0 (Baseline)", color="#38bdf8")
-        ax0.axis("off")
-        frame_slot.pyplot(fig0)
-        plt.close(fig0)
-        time.sleep(speed)
-
-        fig1, ax1 = plt.subplots(figsize=(6, 6))
-        fig1.patch.set_facecolor("#0b0f19")
-        ax1.set_facecolor("#0b0f19")
-        ax1.imshow(img_data_1, cmap="inferno", origin="lower")
-        ax1.set_title(
-            f"🔴 Epoch 1 (+{int(delta_years)} Yrs Shift)", color="#f43f5e"
-        )
-        ax1.axis("off")
-        frame_slot.pyplot(fig1)
-        plt.close(fig1)
-        time.sleep(speed)
-
-  with col2:
-    st.markdown("### 📊 Telemetry & Analysis")
-    st.markdown(
-        f"""
-        <div class="metric-card">
-        <b>🚀 Live Mission Telemetry:</b><br>
-        • <b>Timeline Jump:</b> {int(delta_years)} Earth Years<br>
-        • <b>Calculated Offset:</b> ΔX = {shift_x_pixels} px, ΔY = {shift_y_pixels} px<br><br>
-        <b>🕵️‍♂️ The Backstory:</b><br>
-        WISE 0855-0714 is the coolest known brown dwarf out there—a failed star wandering the cosmos like an interstellar ghost. Its massive proper motion makes it the ultimate test subject for SPHEREx time-domain astrometry surveys!
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    st.markdown("")
-    st.success(
-        "✨ **Status:** The ghost is successfully sprinting across the grid."
-    )
-
+    with st.spinner("Establishing uplink to SkyView archives..."):
+        img_data = get_cached_image(target_ra, target_dec)
+        
+    fig_img, ax = plt.subplots()
+    fig_img.patch.set_facecolor('#0B0E14') 
+    ax.imshow(img_data, cmap='magma', origin='lower')
+    ax.axis('off') 
+    st.pyplot(fig_img, use_container_width=False)
 except Exception as e:
-  st.error(f"⚠️ Telemetry feed interrupted: {e}")
+    st.error(f"⚠️ Telemetry Uplink Failed: {e}")
+
+# --- 7. SIMULATED INFRARED FLUX STREAM ---
+st.subheader("📡 Infrared Flux Data Stream")
+st.write("Simulating real-time atmospheric anomaly detection...")
+
+chart_placeholder = st.empty()
+flux_data = []
+
+for i in range(30):
+    new_flux = 6.03e-8 + np.random.normal(0, 0.2e-8)
+    flux_data.append(new_flux)
+    chart_placeholder.line_chart(flux_data, height=200)
+    time.sleep(0.08) # Slightly faster sweep!
