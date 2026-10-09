@@ -1,4 +1,6 @@
 streamlit
-astropy
-matplotlib
+plotly
 numpy
+matplotlib
+astroquery
+astropy
