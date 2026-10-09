@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import plotly.graph_objects as go
 import numpy as np
 import matplotlib.pyplot as plt
@@ -81,7 +82,153 @@ fig_main.update_layout(
     height=550, margin=dict(l=40, r=40, t=40, b=40)
 )
 st.plotly_chart(fig_main, use_container_width=True)
-# --- 5. PROPER MOTION TIME-MACHINE (NATIVE PLOTLY ANIMATION) ---
+
+# --- 5. 3D GALACTIC NEIGHBORHOOD MAP ---
+st.divider()
+st.subheader("🌌 3D Interactive Galactic Neighborhood (Local Bubble)")
+st.write("Explore WISE 0855−0714 positioned in 3D interstellar space relative to the Sun and the nearest stellar systems within ~12 light-years. Rotate, zoom, and pan the interactive volume:")
+
+local_stars = [
+    {"name": "Sol (Sun / Earth Base)", "ra": 0.0, "dec": 0.0, "dist": 0.0, "type": "G2V Star", "color": "#FFD700", "size": 12},
+    {"name": "WISE 0855−0714", "ra": 133.795, "dec": -7.245, "dist": 7.43, "type": "Y2 Sub-Brown Dwarf", "color": "#00FFCC", "size": 14},
+    {"name": "Alpha Centauri A/B", "ra": 219.90, "dec": -60.83, "dist": 4.37, "type": "G2V / K1V Binary", "color": "#FFA726", "size": 9},
+    {"name": "Proxima Centauri", "ra": 217.43, "dec": -62.68, "dist": 4.24, "type": "M5.5V Red Dwarf", "color": "#FF5252", "size": 7},
+    {"name": "Barnard's Star", "ra": 269.45, "dec": 4.69, "dist": 5.96, "type": "M4.0V Red Dwarf", "color": "#FF5252", "size": 7},
+    {"name": "Luhman 16 A/B", "ra": 162.33, "dec": -53.32, "dist": 6.51, "type": "L7.5 / T0.5 Brown Dwarf Pair", "color": "#CE93D8", "size": 9},
+    {"name": "Wolf 359", "ra": 164.12, "dec": 7.01, "dist": 7.86, "type": "M6.0V Red Dwarf", "color": "#FF5252", "size": 7},
+    {"name": "Lalande 21185", "ra": 165.83, "dec": 35.97, "dist": 8.31, "type": "M2.0V Red Dwarf", "color": "#FF5252", "size": 7},
+    {"name": "Sirius A/B", "ra": 101.28, "dec": -16.72, "dist": 8.66, "type": "A1V / DA2 Binary", "color": "#E0F7FA", "size": 11},
+    {"name": "Luyten 726-8", "ra": 24.75, "dec": -17.95, "dist": 8.73, "type": "M5.5V Flare Star Pair", "color": "#FF7043", "size": 7},
+    {"name": "Ross 154", "ra": 282.46, "dec": -23.83, "dist": 9.70, "type": "M3.5V Red Dwarf", "color": "#FF5252", "size": 7},
+    {"name": "Epsilon Eridani", "ra": 53.23, "dec": -9.46, "dist": 10.47, "type": "K2V Orange Dwarf", "color": "#FFCA28", "size": 9}
+]
+
+star_x, star_y, star_z, star_color, star_size, star_hover, star_labels = [], [], [], [], [], [], []
+wise_pos = (0.0, 0.0, 0.0)
+
+for s in local_stars:
+    ra_r = np.radians(s["ra"])
+    dec_r = np.radians(s["dec"])
+    x = float(s["dist"] * np.cos(dec_r) * np.cos(ra_r))
+    y = float(s["dist"] * np.cos(dec_r) * np.sin(ra_r))
+    z = float(s["dist"] * np.sin(dec_r))
+    if "WISE" in s["name"]:
+        wise_pos = (x, y, z)
+    star_x.append(x)
+    star_y.append(y)
+    star_z.append(z)
+    star_color.append(s["color"])
+    star_size.append(s["size"])
+    star_labels.append(s["name"])
+
+for i, s in enumerate(local_stars):
+    d_to_wise = np.sqrt((star_x[i] - wise_pos[0])**2 + (star_y[i] - wise_pos[1])**2 + (star_z[i] - wise_pos[2])**2)
+    star_hover.append(
+        f"<b>{s['name']}</b><br>"
+        f"Type: {s['type']}<br>"
+        f"Dist from Sol: {s['dist']} ly<br>"
+        f"Dist to WISE 0855: {d_to_wise:.2f} ly<br>"
+        f"Coordinates: ({star_x[i]:.2f}, {star_y[i]:.2f}, {star_z[i]:.2f}) ly"
+    )
+
+fig_3d = go.Figure()
+
+# Concentric range rings in the XY plane
+angles = np.linspace(0, 2 * np.pi, 100)
+for radius, dash_col in [(5, "rgba(0, 255, 204, 0.22)"), (10, "rgba(0, 255, 204, 0.12)")]:
+    fig_3d.add_trace(go.Scatter3d(
+        x=radius * np.cos(angles),
+        y=radius * np.sin(angles),
+        z=np.zeros_like(angles),
+        mode="lines",
+        line=dict(color=dash_col, width=2, dash="dash"),
+        hoverinfo="text",
+        hovertext=f"{radius} Light-Year Equatorial Range Ring",
+        showlegend=False
+    ))
+
+# Sol to WISE 0855 baseline vector line
+fig_3d.add_trace(go.Scatter3d(
+    x=[0, wise_pos[0]],
+    y=[0, wise_pos[1]],
+    z=[0, wise_pos[2]],
+    mode="lines+text",
+    line=dict(color="#00FFCC", width=4),
+    text=["", "  Baseline Vector (7.43 ly)"],
+    textposition="middle right",
+    textfont=dict(color="#00FFCC", size=11, family="Courier New"),
+    hoverinfo="none",
+    name="Baseline Vector"
+))
+
+# Outer neon glow sphere for WISE 0855
+fig_3d.add_trace(go.Scatter3d(
+    x=[wise_pos[0]],
+    y=[wise_pos[1]],
+    z=[wise_pos[2]],
+    mode="markers",
+    marker=dict(size=26, color="rgba(0, 255, 204, 0.3)", symbol="circle"),
+    hoverinfo="none",
+    showlegend=False
+))
+
+# Main stellar systems trace
+fig_3d.add_trace(go.Scatter3d(
+    x=star_x,
+    y=star_y,
+    z=star_z,
+    mode="markers+text",
+    marker=dict(size=star_size, color=star_color, line=dict(color="white", width=1)),
+    text=star_labels,
+    textposition="top center",
+    textfont=dict(color="#E0E6ED", size=10, family="Courier New"),
+    hoverinfo="text",
+    hovertext=star_hover,
+    name="Local Stellar Systems"
+))
+
+fig_3d.update_layout(
+    scene=dict(
+        bgcolor="#0B0E14",
+        xaxis=dict(
+            title="X (Light-Years)",
+            backgroundcolor="#0B0E14",
+            gridcolor="rgba(0, 255, 204, 0.12)",
+            showbackground=True,
+            zerolinecolor="rgba(0, 255, 204, 0.25)",
+            tickfont=dict(color="#8F9CAE", family="Courier New")
+        ),
+        yaxis=dict(
+            title="Y (Light-Years)",
+            backgroundcolor="#0B0E14",
+            gridcolor="rgba(0, 255, 204, 0.12)",
+            showbackground=True,
+            zerolinecolor="rgba(0, 255, 204, 0.25)",
+            tickfont=dict(color="#8F9CAE", family="Courier New")
+        ),
+        zaxis=dict(
+            title="Z (Light-Years)",
+            backgroundcolor="#0B0E14",
+            gridcolor="rgba(0, 255, 204, 0.12)",
+            showbackground=True,
+            zerolinecolor="rgba(0, 255, 204, 0.25)",
+            tickfont=dict(color="#8F9CAE", family="Courier New")
+        ),
+        camera=dict(
+            eye=dict(x=1.35, y=1.35, z=0.85)
+        )
+    ),
+    paper_bgcolor="#0B0E14",
+    plot_bgcolor="#0B0E14",
+    font=dict(color="#E0E6ED"),
+    height=600,
+    margin=dict(l=20, r=20, t=30, b=20),
+    showlegend=False
+)
+
+st.plotly_chart(fig_3d, use_container_width=True)
+
+# --- 6. PROPER MOTION TIME-MACHINE (NATIVE PLOTLY ANIMATION) ---
 st.divider()
 st.subheader("⏱️ Proper Motion Time-Machine (Jump Loop)")
 st.write("Set the fast-forward timeline, then click the button on the map to watch WISE 0855−0714 physically jump between current and future coordinates!")
@@ -199,7 +346,7 @@ fig_pm.update_layout(
 )
 
 st.plotly_chart(fig_pm, use_container_width=True)
-# --- 6. REAL-TIME ASTRONOMICAL IMAGE CUTOUT ---
+# --- 7. REAL-TIME ASTRONOMICAL IMAGE CUTOUT ---
 st.subheader("📸 Deep Space Infrared Cutout")
 
 @st.cache_data(show_spinner=False)
@@ -218,7 +365,290 @@ try:
 except Exception as e:
     st.error(f"⚠️ Telemetry Uplink Failed: {e}")
 
-# --- 7. SIMULATED INFRARED FLUX STREAM ---
+# --- 8. ATMOSPHERIC CHEMICAL FINGERPRINT ---
+st.divider()
+st.subheader("🧪 Atmospheric Chemical Fingerprint")
+st.write("Relative spectroscopic molecular absorption profile across key atmospheric constituents:")
+
+chem_species = ['Water Ice (H₂O)', 'Methane (CH₄)', 'Ammonia (NH₃)', 'CO', 'N₂']
+absorption_levels = [92, 78, 54, 35, 18]
+
+# Close the radar loop
+theta_radar = chem_species + [chem_species[0]]
+r_radar = absorption_levels + [absorption_levels[0]]
+
+fig_chem = go.Figure()
+
+fig_chem.add_trace(go.Scatterpolar(
+    r=r_radar,
+    theta=theta_radar,
+    fill='toself',
+    fillcolor='rgba(0, 255, 204, 0.25)',
+    line=dict(color='#00FFCC', width=3),
+    marker=dict(color='#00FFCC', size=9, symbol='circle', line=dict(color='#FFFFFF', width=1)),
+    hovertemplate='<b>%{theta}</b><br>Absorption: %{r}%<extra></extra>',
+    name='Chemical Fingerprint'
+))
+
+fig_chem.update_layout(
+    polar=dict(
+        bgcolor='#0B0E14',
+        radialaxis=dict(
+            visible=True,
+            range=[0, 100],
+            ticksuffix='%',
+            tickfont=dict(color='#8F9CAE', size=11, family='Courier New'),
+            gridcolor='rgba(0, 255, 204, 0.15)',
+            linecolor='rgba(0, 255, 204, 0.25)',
+            showticklabels=True
+        ),
+        angularaxis=dict(
+            tickfont=dict(color='#E0E6ED', size=13, family='Courier New'),
+            gridcolor='rgba(0, 255, 204, 0.15)',
+            linecolor='rgba(0, 255, 204, 0.25)'
+        )
+    ),
+    paper_bgcolor='#0B0E14',
+    plot_bgcolor='#0B0E14',
+    font=dict(color='#E0E6ED'),
+    height=480,
+    margin=dict(l=70, r=70, t=50, b=50),
+    showlegend=False
+)
+
+st.plotly_chart(fig_chem, use_container_width=True)
+
+col1, col2, col3, col4, col5 = st.columns(5)
+col1.metric("Water Ice (H₂O)", "92%", "Deep cloud deck")
+col2.metric("Methane (CH₄)", "78%", "Strong band")
+col3.metric("Ammonia (NH₃)", "54%", "Moderate signature")
+col4.metric("CO", "35%", "Disequilibrium")
+col5.metric("N₂", "18%", "Background trace")
+
+# --- 9. DEEP SPACE RADIO BEACON & AUDIO SYNTHESIZER ---
+st.divider()
+st.subheader("📻 Deep Space Radio Beacon & Audio Synthesizer")
+st.write("Trigger an acoustic telemetry transmission via Web Audio API. Synthesizes a high-frequency chirp signal and listens for simulated interstellar echo:")
+
+synth_html = """
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+    body {
+        margin: 0;
+        padding: 10px;
+        background-color: #0B0E14;
+        font-family: 'Courier New', Courier, monospace;
+        color: #E0E6ED;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+    .panel {
+        width: 100%;
+        max-width: 720px;
+        background: rgba(15, 23, 42, 0.7);
+        border: 1px solid rgba(0, 255, 204, 0.35);
+        border-radius: 10px;
+        padding: 16px 20px;
+        box-shadow: 0 0 20px rgba(0, 255, 204, 0.12), inset 0 0 15px rgba(0, 255, 204, 0.05);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 10px;
+        box-sizing: border-box;
+    }
+    .btn-chirp {
+        background: linear-gradient(135deg, rgba(0, 255, 204, 0.2) 0%, rgba(11, 14, 20, 0.95) 100%);
+        color: #00FFCC;
+        border: 2px solid #00FFCC;
+        border-radius: 6px;
+        padding: 13px 26px;
+        font-size: 14px;
+        font-weight: 700;
+        font-family: 'Courier New', Courier, monospace;
+        letter-spacing: 2px;
+        cursor: pointer;
+        transition: all 0.2s ease-in-out;
+        box-shadow: 0 0 14px rgba(0, 255, 204, 0.35), inset 0 0 10px rgba(0, 255, 204, 0.15);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .btn-chirp:hover {
+        background: linear-gradient(135deg, rgba(0, 255, 204, 0.35) 0%, rgba(11, 14, 20, 0.9) 100%);
+        box-shadow: 0 0 25px rgba(0, 255, 204, 0.7), inset 0 0 18px rgba(0, 255, 204, 0.3);
+        transform: translateY(-1px);
+        color: #FFFFFF;
+    }
+    .btn-chirp:active {
+        transform: translateY(1px) scale(0.98);
+        box-shadow: 0 0 35px #00FFCC, inset 0 0 25px #00FFCC;
+    }
+    .hud-status {
+        font-size: 12px;
+        color: #8F9CAE;
+        letter-spacing: 1px;
+        text-align: center;
+    }
+    .hud-status span {
+        color: #00FFCC;
+        font-weight: bold;
+    }
+    .visualizer {
+        display: flex;
+        gap: 4px;
+        align-items: flex-end;
+        height: 18px;
+    }
+    .bar {
+        width: 4px;
+        height: 4px;
+        background: #00FFCC;
+        border-radius: 2px;
+        transition: height 0.1s ease;
+        opacity: 0.3;
+        box-shadow: 0 0 6px rgba(0, 255, 204, 0.5);
+    }
+    .bar.active {
+        opacity: 1;
+        animation: pulseBar 0.35s infinite alternate ease-in-out;
+    }
+    @keyframes pulseBar {
+        0% { height: 4px; }
+        100% { height: 18px; }
+    }
+</style>
+</head>
+<body>
+<div class="panel">
+    <button class="btn-chirp" id="chirpBtn" onclick="triggerSpaceChirp()">
+        <span>📡</span> TRANSMIT DEEP SPACE CHIRP SIGNAL
+    </button>
+    
+    <div class="visualizer" id="visualizer">
+        <div class="bar" style="animation-delay: 0.05s"></div>
+        <div class="bar" style="animation-delay: 0.15s"></div>
+        <div class="bar" style="animation-delay: 0.25s"></div>
+        <div class="bar" style="animation-delay: 0.10s"></div>
+        <div class="bar" style="animation-delay: 0.30s"></div>
+        <div class="bar" style="animation-delay: 0.20s"></div>
+        <div class="bar" style="animation-delay: 0.05s"></div>
+        <div class="bar" style="animation-delay: 0.18s"></div>
+    </div>
+    
+    <div class="hud-status" id="hudStatus">
+        BEACON: <span>ARMED & READY</span> // CARRIER: <span>4.80 GHz SYNTH</span> // TARGET: <span>WISE 0855−0714</span>
+    </div>
+</div>
+
+<script>
+let audioCtx = null;
+
+function triggerSpaceChirp() {
+    try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (!audioCtx) {
+            audioCtx = new AudioContext();
+        }
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
+
+        const now = audioCtx.currentTime;
+        const masterGain = audioCtx.createGain();
+        masterGain.gain.setValueAtTime(0.5, now);
+        masterGain.connect(audioCtx.destination);
+
+        // 1. Primary Outbound Chirp: High-speed exponential upward sweep (380 Hz -> 3200 Hz)
+        const osc1 = audioCtx.createOscillator();
+        const gain1 = audioCtx.createGain();
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(380, now);
+        osc1.frequency.exponentialRampToValueAtTime(3200, now + 0.30);
+
+        gain1.gain.setValueAtTime(0.001, now);
+        gain1.gain.linearRampToValueAtTime(0.4, now + 0.03);
+        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.34);
+
+        osc1.connect(gain1);
+        gain1.connect(masterGain);
+        osc1.start(now);
+        osc1.stop(now + 0.35);
+
+        // 2. Harmonic Telemetry Overtone with Resonant Bandpass Filter
+        const osc2 = audioCtx.createOscillator();
+        const gain2 = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter();
+        
+        osc2.type = 'sawtooth';
+        osc2.frequency.setValueAtTime(760, now);
+        osc2.frequency.exponentialRampToValueAtTime(5400, now + 0.28);
+
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(800, now);
+        filter.frequency.exponentialRampToValueAtTime(3600, now + 0.30);
+        filter.Q.setValueAtTime(6.0, now);
+
+        gain2.gain.setValueAtTime(0.001, now);
+        gain2.gain.linearRampToValueAtTime(0.12, now + 0.02);
+        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.30);
+
+        osc2.connect(filter);
+        filter.connect(gain2);
+        gain2.connect(masterGain);
+        osc2.start(now);
+        osc2.stop(now + 0.32);
+
+        // 3. Simulated Echo Return from WISE 0855 at t + 0.42s
+        const echoOsc = audioCtx.createOscillator();
+        const echoGain = audioCtx.createGain();
+        echoOsc.type = 'sine';
+        echoOsc.frequency.setValueAtTime(1750, now + 0.42);
+        echoOsc.frequency.exponentialRampToValueAtTime(520, now + 0.85);
+
+        echoGain.gain.setValueAtTime(0.001, now + 0.42);
+        echoGain.gain.linearRampToValueAtTime(0.28, now + 0.46);
+        echoGain.gain.exponentialRampToValueAtTime(0.0001, now + 0.95);
+
+        echoOsc.connect(echoGain);
+        echoGain.connect(masterGain);
+        echoOsc.start(now + 0.42);
+        echoOsc.stop(now + 1.0);
+
+        // Visual HUD updates
+        const hud = document.getElementById('hudStatus');
+        const bars = document.querySelectorAll('.bar');
+        bars.forEach(b => b.classList.add('active'));
+
+        hud.innerHTML = 'STATUS: <span style="color:#FF3333">TRANSMITTING PULSE...</span> [4.8 GHz CHIRP SENT]';
+
+        setTimeout(() => {
+            hud.innerHTML = 'STATUS: <span style="color:#00FFCC">📡 INTERSTELLAR ECHO RECEIVED!</span> [SNR: +24.6 dB]';
+        }, 440);
+
+        setTimeout(() => {
+            bars.forEach(b => b.classList.remove('active'));
+            hud.innerHTML = 'BEACON: <span>ARMED & READY</span> // CARRIER: <span>4.80 GHz SYNTH</span> // TARGET: <span>WISE 0855−0714</span>';
+        }, 1400);
+
+    } catch (e) {
+        console.error(e);
+    }
+}
+</script>
+</body>
+</html>
+"""
+
+components.html(synth_html, height=175)
+
+# --- 10. SIMULATED INFRARED FLUX STREAM ---
+st.divider()
 st.subheader("📡 Infrared Flux Data Stream")
 st.write("Simulating real-time atmospheric anomaly detection...")
 
